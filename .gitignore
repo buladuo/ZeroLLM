@@ -1,0 +1,26 @@
+# Build directories
+build/
+cmake-build-*/
+
+# Log files
+*.log
+
+# Compiled object files
+*.o
+*.obj
+
+# Executables
+*.exe
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.devcontainer/
+
+
+data/tokenizer/
+data/dataset/
+data/model/
