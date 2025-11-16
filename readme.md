@@ -12,7 +12,7 @@
 
 <p align="center">
 
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/hkust-nlp/zerollm?style=flat-square"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/buladuo/ZeroLLM?style=flat-square"></a>
 
   <a href="#"><img alt="Language" src="https://img.shields.io/badge/language-C%2FC%2B%2B-green?style=flat-square"></a>
 
@@ -119,4 +119,4 @@ make -j$(nproc)
 
 ## 📄 许可证
 
-[MIT License](https://www.google.com/search?q=LICENSE)
+[MIT License](LICENSE)
