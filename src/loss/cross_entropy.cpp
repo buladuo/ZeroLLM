@@ -44,8 +44,6 @@ float CrossEntropyLoss::forward(const float* logits, const int* targets, int bat
     softmax(logits, softmax_output_, batch_size, num_classes, 0);
     zerollm_backend::device_synchronize();
     
-    // 在设备上计算损失
-    float* d_losses = (float*)zerollm_backend::malloc(batch_size * sizeof(float));
     
     // 创建CUDA内核来计算每个样本的损失
     float* h_losses = new float[batch_size];
@@ -74,7 +72,6 @@ float CrossEntropyLoss::forward(const float* logits, const int* targets, int bat
     delete[] h_softmax;
     delete[] h_targets;
     delete[] h_losses;
-    zerollm_backend::free(d_losses);
     
     float avg_loss = total_loss / batch_size;
     LOG_DEBUG("CrossEntropyLoss forward completed. Average loss: " << avg_loss);

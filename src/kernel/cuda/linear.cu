@@ -110,23 +110,56 @@ void linear_backward(const T* d_output,
     // d_output: [M, N], weight: [N, K]
     // d_input: [M, K]
     if (d_input != nullptr) {        
-        // 计算 d_input = d_output * weight_transposed
+        // C[M, K] = A[M, N] * B[N, K]
+        // 映射到 matmul_tiled(A, B, C, M, N, K)
+        // A = d_output, B = weight, C = d_input
+        // M (C_rows) = M
+        // N (C_cols) = K
+        // K (Reduce) = N
         matmul_tiled<T>(d_output, weight, d_input, (int)M, (int)K, (int)N, stream);
+        // (此部分调用在你的原始代码中是正确的)
     }
     
-    // 计算权重梯度: d_weight += input^T * d_output
-    // input: [M, K], d_output: [M, N]
-    // d_weight: [K, N] => 转置后为 [N, K]
+    // 计算权重梯度: d_weight = d_output^T * input
+    // d_output (A): [M, N]
+    // input    (B): [M, K]
+    // d_weight (C): [N, K]
     if (d_weight != nullptr) {
-        // 使用优化的矩阵乘法
-        // input^T [K, M] * d_output [M, N] = d_weight [K, N]
-        // 但我们存储的是 [N, K] 的转置形式
-        matmul_transposed_tiled_A_T_B<T>(input, d_output, d_weight, (int)K, (int)N, (int)M, stream);
+        // *** 这是修正的部分 ***
+        //
+        // 目标: d_weight[N, K] = d_output^T[N, M] * input[M, K]
+        //
+        // 映射到 matmul_transposed_tiled_A_T_B(A, B, C, M_reduce, N_out, K_out)
+        // A (kernel) = d_output, 物理 [M, N]
+        // B (kernel) = input,    物理 [M, K]
+        // C (kernel) = d_weight, 物理 [N, K]
+        //
+        // 内核布局期望:
+        // A [M_reduce, K_out] => [M, N]
+        // B [M_reduce, N_out] => [M, K]
+        // C [K_out, N_out]    => [N, K]
+        //
+        // 维度映射:
+        // M_reduce (归约) = M
+        // K_out    (C行)  = N
+        // N_out    (C列)  = K
+        //
+        // 原始调用 (错误): matmul_..._A_T_B(input, d_output, d_weight, (int)K, (int)N, (int)M, stream);
+        //
+        // 正确调用:
+        matmul_transposed_tiled_A_T_B<T>(
+            d_output, // A
+            input,    // B
+            d_weight, // C
+            (int)M,   // M_reduce
+            (int)K,   // N_out (C的列数)
+            (int)N,   // K_out (C的行数)
+            stream
+        );
     }
     
     // 计算偏置梯度: d_bias += sum(d_output, axis=0)
-    // d_output: [M, N]
-    // d_bias: [N]
+    // (此部分调用在你的原始代码中是正确的)
     if (use_bias && d_bias != nullptr) {
         int block_size = ZEROLLM_DEFAULT_THREADS;
         int grid_size = ZEROLLM_CALC_BLOCKS((int)N);

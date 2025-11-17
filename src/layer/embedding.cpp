@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <random>
 #include <cstring> // for memcpy
-#include <cmath>   // for sin, cos, pow
 #include "config.hpp"  // 引入后端配置头文件
 #include "async_logger.hpp"
 #include "serializer.hpp"
@@ -57,6 +56,8 @@ Embedding::Embedding(int vocab_size, int embed_dim, int max_seq_len, bool with_g
         d_embedding_table_grad_ = (float*)zerollm_backend::malloc((int64_t)vocab_size_ * embed_dim_ * sizeof(float));
         zerollm_backend::memset(d_embedding_table_grad_, 0, (int64_t)vocab_size_ * embed_dim_ * sizeof(float));
     }
+    register_parameter("embedding_table", d_embedding_table_, d_embedding_table_grad_, (size_t)vocab_size_ * embed_dim_,with_grad_);
+    register_parameter("pos_encoding_table", d_pos_encoding_table_, nullptr, (size_t)vocab_size_ * embed_dim_, false);
     
     // 释放主机内存
     delete[] embedding_table_;

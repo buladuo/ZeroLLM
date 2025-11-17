@@ -41,6 +41,9 @@ ZeroLLM::ZeroLLM(const ZeroLLMConfig& config)
         config_.with_grad,
         1e-5f
     );
+    register_module("embedding", embedding_);
+    register_module("decoder", decoder_);
+    register_module("output_ln", output_ln_);
     
     LOG_INFO("ZeroLLM model initialized successfully with " << calculate_num_params() << "M parameters");
 }
@@ -251,55 +254,43 @@ void ZeroLLM::backward(const int* input_ids, const float* d_logits, int batch_si
     // 即: d_embedding_weight = (hidden_states^T @ d_logits)^T = d_logits^T @ hidden_states
     float* d_embedding_weight = embedding_->d_embedding_table();
     if (d_embedding_weight) {
-        // 分配临时缓冲区
-        LOG_DEBUG("Computing embedding weight gradients");
-        float* d_embedding_weight_T = (float*)zerollm_backend::malloc(
-            config_.embed_dim * config_.vocab_size * sizeof(float)
-        );
-        
-        // 计算 d_embedding_weight^T = hidden_states^T @ d_logits
-        // hidden_states^T: [embed_dim, batch_size * seq_len] = [K, M]
-        // d_logits: [batch_size * seq_len, vocab_size] = [M, N]
-        // d_embedding_weight^T: [embed_dim, vocab_size] = [K, N]
-        matmul_tiled<float>(
-            hidden_states_,       // [batch_size * seq_len, embed_dim] = [M, K]
-            d_logits_temp,        // [batch_size * seq_len, vocab_size] = [M, N]
-            d_embedding_weight_T, // [embed_dim, vocab_size] = [K, N] (转置后的结果)
-            config_.embed_dim,    // K
-            config_.vocab_size,   // N
-            batch_size * seq_len, // M
-            0                     // stream
-        );
-        
-        // 转置回原始形状
-        // d_embedding_weight_T: [embed_dim, vocab_size]
-        // d_embedding_weight: [vocab_size, embed_dim]
-        // 注意：我们需要累加梯度，所以先转置到临时缓冲区，然后累加
-        float* d_embedding_weight_temp = (float*)zerollm_backend::malloc(
-            config_.vocab_size * config_.embed_dim * sizeof(float)
-        );
-        
-        transpose<float>(
-            d_embedding_weight_T,
-            d_embedding_weight_temp,
-            config_.embed_dim,    // 原矩阵行数
-            config_.vocab_size,   // 原矩阵列数
-            0                     // stream
-        );
-        
-        // 累加梯度到embedding的梯度缓冲区
-        // 注意：embedding的backward可能也会计算梯度（从input_ids），
-        // 但通常output层的梯度是主要的，所以这里直接累加
-        int embedding_grad_size = config_.vocab_size * config_.embed_dim;
-        add_inplace<float>(
-            d_embedding_weight,
-            d_embedding_weight_temp,
-            embedding_grad_size,
-            0
-        );
-        
-        zerollm_backend::free(d_embedding_weight_T);
-        zerollm_backend::free(d_embedding_weight_temp);
+        // 2. Backward through embedding weight (累加来自 Logits 的梯度)
+        //    (使用您原始的、正确的变量名 d_embedding_weight)
+        float* d_embedding_weight = embedding_->d_embedding_table(); 
+        if (d_embedding_weight) {
+            LOG_DEBUG("Computing embedding weight gradients from logits");
+
+            // 我们需要一个临时缓冲区来存放这部分的梯度
+            // 因为 add_inplace (a, b) 会修改 a, 我们需要 b 是独立的
+            float* d_embed_from_logits = (float*)zerollm_backend::malloc(
+                (int64_t)config_.vocab_size * config_.embed_dim * sizeof(float)
+            );
+            
+            // 使用我们修复过的 matmul_transposed_tiled_A_T_B Kernel
+            // C[N,K] = A[M,N]^T @ B[M,K]
+            // C = d_embed_from_logits [V, E] -> N=V, K=E
+            // A = d_logits_temp [B*S, V]     -> M=B*S, N=V
+            // B = hidden_states_ [B*S, E]    -> M=B*S, K=E
+            matmul_transposed_tiled_A_T_B<float>(
+                d_logits_temp,          // A
+                hidden_states_,         // B
+                d_embed_from_logits,    // C
+                (int)(batch_size * seq_len), // M_param
+                (int)config_.embed_dim,    // K_param (C's cols)
+                (int)config_.vocab_size,   // N_param (C's rows)
+                0
+            );
+
+            // 累加这部分梯度 (a = a + b)
+            add_inplace<float>(
+                d_embedding_weight,      // a (主梯度缓冲区 - 已更正)
+                d_embed_from_logits,     // b (来自 logits 的梯度)
+                (int)(config_.vocab_size * config_.embed_dim),
+                0
+            );
+
+            zerollm_backend::free(d_embed_from_logits);
+        }
     }
     
     // 3. Backward through output LayerNorm
@@ -310,13 +301,15 @@ void ZeroLLM::backward(const int* input_ids, const float* d_logits, int batch_si
     LOG_DEBUG("Backward through transformer decoder");
     decoder_->backward(d_ln_output, d_ln_output);
     
-    // 5. Backward through Embedding
-    // 注意：embedding的backward通常是从input_ids计算的（用于更新权重），
-    // 但这里我们已经从output层计算了embedding权重的梯度并累加了。
-    // 如果embedding层需要从hidden_states反向传播（虽然通常不需要），
-    // 可以在这里调用embedding_->backward，但需要传入d_ln_output作为d_output
-    // 由于input_ids是离散的，通常不需要计算input_ids的梯度，
-    // 所以这里我们跳过embedding的backward（权重梯度已经在步骤2中处理了）
+    // 5. Backward through Embedding (累加来自 Decoder 的梯度)
+    LOG_DEBUG("Backward through embedding layer (for token grads)");
+    embedding_->backward(
+        input_ids,          // const int* input
+        d_ln_output,        // const float* d_output (这是 dL/d(Embedding_output))
+        batch_size,
+        seq_len,
+        true                // accumulate = true (极其重要!)
+    );
     
     // 清理临时缓冲区
     LOG_DEBUG("Cleaning up temporary buffers");

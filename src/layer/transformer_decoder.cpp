@@ -28,6 +28,7 @@ TransformerDecoder::TransformerDecoder(int num_layers, int embed_dim, int num_he
     // 创建解码器层
     for (int i = 0; i < num_layers; ++i) {
         layers_.push_back(new TransformerDecoderBlock(embed_dim, num_heads, ff_hidden_dim, with_grad));
+        register_module("transfomer_block_" + std::to_string(i), layers_[i]);
     }
     
     LOG_DEBUG("TransformerDecoder initialized with " << layers_.size() << " layers");

@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include "linear.hpp"
+#include "module.hpp"
 
 /**
  * @brief 多头注意力机制类
@@ -16,7 +17,7 @@
  * 5. 计算输出: softmax(QK^T/sqrt(d_k)) * V
  * 6. 通过输出投影层
  */
-class MultiHeadAttention {
+class MultiHeadAttention : public Module {
 public:
     static constexpr const char* TYPE_NAME = "MultiHeadAttention";
 private:
@@ -151,4 +152,6 @@ public:
      * @brief 清零所有梯度
      */
     void zero_grad();
+
+    std::string type_name() const override { return TYPE_NAME; }
 };

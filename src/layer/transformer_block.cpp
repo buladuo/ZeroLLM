@@ -32,6 +32,11 @@ TransformerDecoderBlock::TransformerDecoderBlock(int embed_dim, int num_heads, i
     ln2_ = new LayerNorm(embed_dim, with_grad);
     ff_ = new FeedForward(embed_dim, ff_hidden_dim, with_grad);
     
+    register_module("self_attn", self_attn_);
+    register_module("ln1", ln1_);
+    register_module("ln2", ln2_);
+    register_module("ff", ff_);
+    
     LOG_DEBUG("TransformerDecoderBlock initialized");
 }
 

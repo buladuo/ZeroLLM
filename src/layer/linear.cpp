@@ -54,6 +54,9 @@ Linear::Linear(int in_features, int out_features, bool use_bias, bool with_grad)
             zerollm_backend::memset(d_bias_, 0, (int64_t)out_features_ * sizeof(float));
         }
     }
+
+    register_parameter("weight", weight_, d_weight_, (size_t)out_features_ * in_features_, with_grad_);
+    register_parameter("bias", bias_, d_bias_, (size_t)out_features_, with_grad_);
 }
 
 

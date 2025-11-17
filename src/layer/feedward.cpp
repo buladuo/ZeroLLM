@@ -29,6 +29,9 @@ FeedForward::FeedForward(int embed_dim, int ff_hidden_dim, bool with_grad)
     relu_ = new ReLU();
     ff2_ = new Linear(ff_hidden_dim, embed_dim, true, with_grad);  // with bias
     
+    register_module("ff1", ff1_);
+    register_module("relu", ff2_);
+
     LOG_DEBUG("FeedForward initialized");
 }
 
