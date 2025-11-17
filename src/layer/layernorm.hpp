@@ -5,13 +5,14 @@
 #include <string>
 
 #include "optimizer.hpp"
+#include "module.hpp"
 /**
  * @brief Layer Normalization 层类
  * 
  * 实现层归一化操作，对每个样本的特征维度进行归一化处理
  * 公式: y = gamma * (x - mean) / sqrt(var + eps) + beta
  */
-class LayerNorm {
+class LayerNorm : public Module {
 public:
     static constexpr const char* TYPE_NAME = "LayerNorm";
 private:
@@ -121,4 +122,6 @@ public:
      * @return 特征维度大小
      */
     int feature_size() const { return feature_size_; }
+
+    std::string type_name() const override { return TYPE_NAME; }
 };

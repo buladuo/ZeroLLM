@@ -51,6 +51,8 @@ LayerNorm::LayerNorm(int feature_size, bool with_grad, float eps)
         zerollm_backend::memset(d_gamma_, 0, feature_size_ * sizeof(float));
         zerollm_backend::memset(d_beta_, 0, feature_size_ * sizeof(float));
     }
+    register_parameter("gamma", gamma_, d_gamma_, feature_size_, with_grad);
+    register_parameter("beta", beta_, d_beta_, feature_size_, with_grad);
 }
 
 /**

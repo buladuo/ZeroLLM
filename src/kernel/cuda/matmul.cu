@@ -145,13 +145,17 @@ __global__ void matmul_transposed_tiled_A_B_T_kernel(const T* A, const T* B, T* 
     }
 }
 
-// 计算 C = A^T * B
-// A: [K, M] (物理存储) -> A^T 是 [M, K]
-// B: [K, N] (物理存储)
-// C: [M, N]
-// K 是累加维度 (Summation Dimension)
+
 template<typename T>
 __global__ void matmul_transposed_tiled_A_T_B_kernel(const T* A, const T* B, T* C, int M, int N, int K) {
+    // 目标: C[K, N] = A^T[K, M] * B[M, N]
+    // A 物理形状: [M, K]
+    // B 物理形状: [M, N]
+    // C 物理形状: [K, N]
+    // M = 归约维度 (Reduction Dim)
+    // N = C 的列数 (C_cols)
+    // K = C 的行数 (C_rows)
+
     const int TILE_SIZE = ZEROLLM_DEFAULT_TILE_SIZE;
     
     __shared__ T As[TILE_SIZE][TILE_SIZE + 1];
@@ -160,48 +164,58 @@ __global__ void matmul_transposed_tiled_A_T_B_kernel(const T* A, const T* B, T* 
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     
-    int global_row = blockIdx.y * TILE_SIZE + ty; // C 的行 (0..M-1)
-    int global_col = blockIdx.x * TILE_SIZE + tx; // C 的列 (0..N-1)
+    // global_row 对应 C 的行 (0..K-1)
+    int global_row = blockIdx.y * TILE_SIZE + ty;
+    // global_col 对应 C 的列 (0..N-1)
+    int global_col = blockIdx.x * TILE_SIZE + tx; 
 
     T Cvalue = 0;
 
-    // 修正：遍历累加维度 K (例如 BatchSize 1024)
-    for (int t = 0; t < K; t += TILE_SIZE) {
+    // *** 修正 1: 必须遍历累加维度 M ***
+    for (int t = 0; t < M; t += TILE_SIZE) {
         
-        // 加载 A 的块 (需要 A^T[row, k] => A[k, row])
-        // A 的物理形状是 [K, M]，Stride 是 M
-        // 行索引是 (t + tx)，列索引是 global_row
-        if ((t + tx) < K && global_row < M)
-            As[ty][tx] = A[(t + tx) * M + global_row]; 
+        // 加载 A 的块: A^T[global_row, t+k] => A[t+k, global_row]
+        // As[ty][tx] 用于 As[ty][k]
+        // As[k][tx] 用于 As[k][tx]
+        // 我们需要 As[k][ty] = A[t+k, global_row]
+        // 我们需要 Bs[k][tx] = B[t+k, global_col]
+        // 这与 C = A*B (As[ty][k], Bs[k][tx]) 的加载模式不同
+
+        // 简化的加载: As[ty][tx] = A^T[global_row+ty, t+tx] = A[t+tx, global_row+ty]
+        // Bs[ty][tx] = B[t+ty, global_col+tx]
+        // 不，我们坚持 C[row, col] += As[row, k] * Bs[k, col] 的模式
+
+        // As[ty][tx] 加载 A^T 瓦片: A^T[global_row, t+tx] => A[t+tx, global_row]
+        // *** 修正 2 & 3: 使用 M 检查, 使用 K 步幅 ***
+        if ((t + tx) < M && global_row < K)
+            As[ty][tx] = A[(t + tx) * K + global_row]; 
         else
             As[ty][tx] = 0;
 
-        // 加载 B 的块 (B[k, col])
-        // B 的物理形状是 [K, N]，Stride 是 N
-        // 行索引是 (t + ty)，列索引是 global_col
-        if ((t + ty) < K && global_col < N)
+        // Bs[ty][tx] 加载 B 瓦片: B[t+ty, global_col]
+        // *** 修正 3: 使用 M 检查 ***
+        if ((t + ty) < M && global_col < N)
             Bs[ty][tx] = B[(t + ty) * N + global_col];
         else
             Bs[ty][tx] = 0;
 
         __syncthreads();
 
-        // 计算乘积
+        // 计算 C_sub[ty, tx] += As[ty, k] * Bs[k, tx]
+        // As[ty][k] = A^T[global_row, t+k] = A[t+k, global_row]
+        // Bs[k][tx] = B[t+k, global_col]
+        // 这是正确的计算
         for (int k = 0; k < TILE_SIZE; ++k) {
-            // As[ty][k] 对应 A[t+k, global_row]
-            // Bs[k][tx] 对应 B[t+k, global_col]
-            // 注意这里使用了 tx 和 ty 的不同映射来利用并行性
             Cvalue += As[ty][k] * Bs[k][tx]; 
         }
 
         __syncthreads();
     }
 
-    if (global_row < M && global_col < N) {
+    if (global_row < K && global_col < N) {
         C[global_row * N + global_col] = Cvalue;
     }
 }
-
 // 矩阵乘法: C = A * B
 template<typename T>
 void matmul(const T* A, const T* B, T* C, int M, int N, int K, cudaStream_t stream) {

@@ -7,6 +7,7 @@
 #include "relu.hpp"
 #include "layernorm.hpp"
 #include "feedward.hpp"
+#include "module.hpp"
 
 /**
  * @brief Transformer解码器块类
@@ -14,7 +15,7 @@
  * 实现标准的Transformer解码器块结构:
  * 输入 -> 自注意力(因果) -> Add&Norm -> 前馈网络 -> Add&Norm -> 输出
  */
-class TransformerDecoderBlock {
+class TransformerDecoderBlock : public Module {
 public:
     static constexpr const char* TYPE_NAME = "TransformerDecoderBlock";
 private:
@@ -105,4 +106,6 @@ public:
      * @brief 清零所有梯度
      */
     void zero_grad();
+
+    std::string type_name() const override { return TYPE_NAME; }
 };

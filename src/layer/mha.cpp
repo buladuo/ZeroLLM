@@ -40,6 +40,10 @@ MultiHeadAttention::MultiHeadAttention(int embed_dim, int num_heads, bool with_g
     k_proj_ = new Linear(embed_dim_, embed_dim_, true, with_grad);
     v_proj_ = new Linear(embed_dim_, embed_dim_, true, with_grad);
     out_proj_ = new Linear(embed_dim_, embed_dim_, true, with_grad);
+
+    register_module("q_proj", q_proj_);
+    register_module("k_proj", k_proj_);
+    register_module("v_proj", v_proj_);
 }
 
 /**

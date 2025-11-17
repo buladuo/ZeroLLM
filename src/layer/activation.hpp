@@ -1,5 +1,5 @@
 #pragma once
-
+#include "module.hpp"
 /**
  * @brief 激活函数基类
  * 

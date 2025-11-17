@@ -5,13 +5,14 @@
 #include <string>
 #include "transformer_block.hpp"
 #include "config.hpp"
+#include "module.hpp"
 
 /**
  * @brief Transformer解码器类
  * 
  * 实现Transformer解码器，用于堆叠多个TransformerDecoderBlock层
  */
-class TransformerDecoder {
+class TransformerDecoder : public Module {
 public:
     static constexpr const char* TYPE_NAME = "TransformerDecoder";
 private:
@@ -108,4 +109,6 @@ public:
      * @brief 清零所有梯度
      */
     void zero_grad();
+
+    std::string type_name() const override { return TYPE_NAME; }
 };

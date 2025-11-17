@@ -78,3 +78,66 @@ inline ZeroLLMConfig create_zerollm_26m_config() {
         true     // with_grad
     );
 }
+
+
+/**
+ * @brief 58M 参数配置 (Deep Nano)
+ * * 相比 26M 版本，保持宽度不变，但将深度翻倍，并略微增加 FFN 宽度。
+ * 适合在显存非常紧张时尝试增加模型非线性能力。
+ * * 估算: ~58M
+ * 建议 Batch Size: 48 或 32
+ */
+inline ZeroLLMConfig create_zerollm_58m_config() {
+    return ZeroLLMConfig(
+        6400,    // vocab_size
+        512,     // embed_dim
+        12,      // num_layers (层数翻倍: 6 -> 12)
+        8,       // num_heads
+        2048,    // ff_hidden_dim
+        2048,    // max_seq_len
+        true     // with_grad
+    );
+}
+
+/**
+ * @brief 110M 参数配置 (Standard Small - 类似 GPT-2 Small / BERT Base)
+ * * 这是验证深度学习框架最经典的"甜点"配置。
+ * 能够学习到较复杂的语法和逻辑，Loss 通常能收敛到 3.0-4.0 以下。
+ * * 估算: ~110M
+ * - Embed: 768
+ * - Layers: 12
+ * - Heads: 12
+ * * !注意!: 以前占用 23GB (Batch 64)，使用此模型必须将 Batch Size 降至 16 或 24。
+ */
+inline ZeroLLMConfig create_zerollm_110m_config() {
+    return ZeroLLMConfig(
+        6400,    // vocab_size
+        768,     // embed_dim (主流基准宽度)
+        12,      // num_layers
+        12,      // num_heads (768 / 64 = 12)
+        3072,    // ff_hidden_dim (通常是 embed_dim * 4)
+        2048,    // max_seq_len
+        true     // with_grad
+    );
+}
+
+/**
+ * @brief 340M 参数配置 (Medium - 类似 GPT-2 Medium)
+ * * 具有较强的拟合能力，如果代码实现正确，Loss 应能轻松低于 3.0。
+ * * 估算: ~340M
+ * - Embed: 1024
+ * - Layers: 24
+ * * !警告!: 显存压力巨大。
+ * 必须将 Batch Size 降至 8 甚至 4 才能在单卡 24G 上运行（取决于你的框架优化程度）。
+ */
+inline ZeroLLMConfig create_zerollm_340m_config() {
+    return ZeroLLMConfig(
+        6400,    // vocab_size
+        1024,    // embed_dim
+        24,      // num_layers (深度很深)
+        16,      // num_heads (1024 / 64 = 16)
+        4096,    // ff_hidden_dim
+        2048,    // max_seq_len
+        true     // with_grad
+    );
+}

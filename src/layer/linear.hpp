@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include "optimizer.hpp"
+#include "module.hpp"
 
 /**
  * @brief 线性层(全连接层)类
@@ -10,7 +11,7 @@
  * 实现线性变换: Y = X * W^T + b
  * 支持前向传播和反向传播，可选择是否使用偏置项
  */
-class Linear {
+class Linear : public Module {
 public:
     static constexpr const char* TYPE_NAME = "Linear";
 private:
@@ -116,4 +117,6 @@ public:
      * @return 偏置梯度指针
      */
     float* d_bias();
+
+    std::string type_name() const override { return TYPE_NAME; }
 };

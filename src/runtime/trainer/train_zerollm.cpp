@@ -291,14 +291,21 @@ int main(int argc, char *argv[])
                                 zerollm_backend::CopyKind::H2D);
 
         float *d_logits = (float *)zerollm_backend::malloc((int64_t)batch.batch_size * batch.seq_len * tokenizer.get_vocab_size() * sizeof(float));
-
+        float *d_logits_grad = nullptr;
+        
+        // 提前创建 CrossEntropyLoss 对象，使其在整个作用域内有效
+        CrossEntropyLoss loss_fn;
+        
         try
         {
+            LOG_DEBUG("Calling model.zero_grad");
+            model.zero_grad();   
+
+            
             LOG_DEBUG("Calling model.forward");
             model.forward(d_logits, d_input_ids, batch.batch_size, batch.seq_len);
 
             // 计算损失 - 将数据展平为(batch_size * seq_len, vocab_size)的形式
-            CrossEntropyLoss loss_fn;
             LOG_DEBUG("Calculating loss");
             float loss = loss_fn.forward(d_logits, d_target_ids,
                                          batch.batch_size * batch.seq_len,
@@ -308,7 +315,7 @@ int main(int argc, char *argv[])
             loss_recorder.record(loss);
 
             // 反向传播
-            float *d_logits_grad = (float *)zerollm_backend::malloc((int64_t)batch.batch_size * batch.seq_len * tokenizer.get_vocab_size() * sizeof(float));
+            d_logits_grad = (float *)zerollm_backend::malloc((int64_t)batch.batch_size * batch.seq_len * tokenizer.get_vocab_size() * sizeof(float));
             LOG_DEBUG("Calling loss_fn.backward");
             loss_fn.backward(d_logits_grad, d_logits, d_target_ids,
                              batch.batch_size * batch.seq_len,
@@ -326,14 +333,21 @@ int main(int argc, char *argv[])
             zerollm_backend::free(d_target_ids);
             zerollm_backend::free(d_logits);
             zerollm_backend::free(d_logits_grad);
+            d_logits = nullptr;
+            d_logits_grad = nullptr;
         }
         catch (const std::exception &e)
         {
             LOG_ERROR("Error during training iteration " << batch_count << ": " << e.what());
+            // 仅释放尚未释放的指针
             zerollm_backend::free(d_input_ids);
             zerollm_backend::free(d_target_ids);
-            zerollm_backend::free(d_logits);
-            // 不要尝试释放未分配的d_logits_grad
+            if (d_logits) {
+                zerollm_backend::free(d_logits);
+            }
+            if (d_logits_grad) {
+                zerollm_backend::free(d_logits_grad);
+            }
             throw;
         }
     }

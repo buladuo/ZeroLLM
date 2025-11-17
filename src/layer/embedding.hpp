@@ -4,7 +4,7 @@
 #include <vector>
 #include "optimizer.hpp"
 #include <string>
-
+#include "module.hpp"
 
 /**
  * @brief 嵌入层类，用于将token IDs转换为嵌入向量表示
@@ -12,7 +12,7 @@
  * 该类实现了词嵌入和位置编码的组合，将离散的token IDs映射为连续的向量表示。
  * 使用CUDA加速计算，支持前向传播和反向传播。
  */
-class Embedding {
+class Embedding : public Module {
 public:
     static constexpr const char* TYPE_NAME = "Embedding";
 
@@ -131,4 +131,6 @@ public:
      * @brief 获取词汇表大小
      */
     int vocabSize() const { return vocab_size_; }
+
+    std::string type_name() const override { return TYPE_NAME; }
 };

@@ -3,13 +3,14 @@
 #include "linear.hpp"
 #include "relu.hpp"
 #include "optimizer.hpp"
+#include "module.hpp"
 /**
  * @brief 前馈神经网络层类
  * 
  * 实现标准的前馈神经网络结构:
  * 输入 -> Linear1 -> ReLU -> Linear2 -> 输出
  */
-class FeedForward {
+class FeedForward : public Module {
 public:
     static constexpr const char* TYPE_NAME = "FeedForward";
 private:
@@ -100,4 +101,6 @@ public:
      * @brief 清零所有梯度
      */
     void zero_grad();
+
+    std::string type_name() const override { return TYPE_NAME; }
 };

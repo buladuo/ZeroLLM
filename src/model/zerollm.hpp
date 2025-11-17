@@ -4,14 +4,14 @@
 #include <stdexcept>
 #include <string>
 #include "zerollm_config.hpp"
-#include "../layer/embedding.hpp"
-#include "../layer/transformer_decoder.hpp"
-#include "../layer/layernorm.hpp"
-#include "../kernel/cuda/matmul.cuh"
-#include "../kernel/cuda/transpose.cuh"
-#include "../kernel/cuda/add.cuh"
-#include "../config.hpp"
-
+#include "embedding.hpp"
+#include "transformer_decoder.hpp"
+#include "layernorm.hpp"
+#include "matmul.cuh"
+#include "transpose.cuh"
+#include "add.cuh"
+#include "config.hpp"
+#include "module.hpp"
 /**
  * @brief ZeroLLM 语言模型类
  * 
@@ -20,7 +20,7 @@
  * - Transformer Decoder：多层Transformer解码器
  * - Output层：与Embedding共享权重的输出层（转置）
  */
-class ZeroLLM {
+class ZeroLLM : public Module {
 public:
     static constexpr const char* TYPE_NAME = "ZeroLLM";
 private:
@@ -128,5 +128,7 @@ public:
      * @return 参数量（M）
      */
     double num_params() const { return calculate_num_params(); }
+
+    std::string type_name() const override { return TYPE_NAME; }
 };
 
